@@ -6,7 +6,7 @@ See `docs/superpowers/specs/2026-05-07-now-its-your-choice-phase1-design.md` for
 ## Setup
 
 ```bash
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```

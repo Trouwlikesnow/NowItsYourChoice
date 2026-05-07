@@ -114,7 +114,7 @@ python -m scripts.main
 - [ ] **Step 7：建本地虚拟环境并安装依赖**
 
 ```bash
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -1316,7 +1316,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install deps
