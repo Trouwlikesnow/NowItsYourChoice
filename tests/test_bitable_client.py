@@ -65,3 +65,15 @@ def test_batch_create_chunks_and_calls_api(mocker):
     records = [{"代码": str(i)} for i in range(1200)]
     client.batch_create("tbl", records)
     assert post.call_count == 3
+
+
+def test_batch_delete_chunks_record_ids(mocker):
+    mocker.patch.object(BitableClient, "_get_tenant_access_token", return_value="t")
+    post = mocker.patch(
+        "scripts.bitable_client.requests.post",
+        return_value=_resp({"code": 0}),
+    )
+    client = BitableClient("app", "secret", "base")
+    ids = [f"r{i}" for i in range(1100)]
+    client.batch_delete("tbl", ids)
+    assert post.call_count == 3

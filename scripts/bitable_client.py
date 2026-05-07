@@ -75,3 +75,20 @@ class BitableClient:
             data = resp.json()
             if data.get("code") != 0:
                 raise RuntimeError(f"Feishu batch_create error: {data}")
+
+    def batch_delete(
+        self, table_id: str, record_ids: list[str], chunk_size: int = 500
+    ) -> None:
+        url = (
+            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
+            f"/tables/{table_id}/records/batch_delete"
+        )
+        for i in range(0, len(record_ids), chunk_size):
+            chunk = record_ids[i : i + chunk_size]
+            resp = requests.post(
+                url, headers=self._headers(), json={"records": chunk}, timeout=20
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("code") != 0:
+                raise RuntimeError(f"Feishu batch_delete error: {data}")
