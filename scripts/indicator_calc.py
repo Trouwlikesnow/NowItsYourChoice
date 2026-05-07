@@ -36,6 +36,12 @@ def compute_indicators(
             rows.extend(_compute_ma(code, df, period, name, window, update_time))
         elif name == "MACD":
             rows.extend(_compute_macd(code, df, period, update_time))
+        elif name == "RSI14":
+            rows.extend(_compute_rsi(code, df, period, update_time))
+        elif name == "KDJ":
+            rows.extend(_compute_kdj(code, df, period, update_time))
+        elif name == "BOLL":
+            rows.extend(_compute_boll(code, df, period, update_time))
         # unknown -> silently skip
     return rows
 
@@ -111,4 +117,70 @@ def _compute_macd(code, df, period, update_time):
             state = "上行" if cur > prev else "下行"
         rows.append(_row(code, period, label, round(cur, 4),
                          round(prev, 4) if prev is not None else None, state, update_time))
+    return rows
+
+
+def _compute_rsi(code, df, period, update_time):
+    series = ta.rsi(df["close"], length=14)
+    if series is None:
+        return []
+    cur, prev = _last_two(series)
+    if cur is None:
+        return []
+    if cur > 80:
+        state = "超买"
+    elif cur < 20:
+        state = "超卖"
+    elif cur >= 50:
+        state = "偏强"
+    else:
+        state = "偏弱"
+    return [_row(code, period, "RSI14", round(cur, 2),
+                 round(prev, 2) if prev is not None else None, state, update_time)]
+
+
+def _kdj_state(cur):
+    if cur > 80:
+        return "高位"
+    if cur < 20:
+        return "低位"
+    return "中位"
+
+
+def _compute_kdj(code, df, period, update_time):
+    res = ta.kdj(df["high"], df["low"], df["close"])
+    if res is None or res.empty:
+        return []
+    k_col = next((c for c in res.columns if c.startswith("K_")), None)
+    d_col = next((c for c in res.columns if c.startswith("D_")), None)
+    j_col = next((c for c in res.columns if c.startswith("J_")), None)
+    rows = []
+    for label, col in (("KDJ-K", k_col), ("KDJ-D", d_col), ("KDJ-J", j_col)):
+        if col is None:
+            continue
+        cur, prev = _last_two(res[col])
+        if cur is None:
+            continue
+        rows.append(_row(code, period, label, round(cur, 2),
+                         round(prev, 2) if prev is not None else None,
+                         _kdj_state(cur), update_time))
+    return rows
+
+
+def _compute_boll(code, df, period, update_time):
+    res = ta.bbands(df["close"], length=20, std=2)
+    if res is None or res.empty:
+        return []
+    lower_col = next((c for c in res.columns if c.startswith("BBL_")), None)
+    mid_col = next((c for c in res.columns if c.startswith("BBM_")), None)
+    upper_col = next((c for c in res.columns if c.startswith("BBU_")), None)
+    rows = []
+    for label, col in (("BOLL-UPPER", upper_col), ("BOLL-MID", mid_col), ("BOLL-LOWER", lower_col)):
+        if col is None:
+            continue
+        cur, prev = _last_two(res[col])
+        if cur is None:
+            continue
+        rows.append(_row(code, period, label, round(cur, 4),
+                         round(prev, 4) if prev is not None else None, "", update_time))
     return rows

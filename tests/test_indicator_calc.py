@@ -43,3 +43,48 @@ def test_macd_emits_three_subindicators():
     for r in rows:
         assert isinstance(r["当前值"], float)
         assert r["更新时间"]
+
+
+def test_rsi14_classifies_state():
+    df = _make_df([float(i) for i in range(1, 61)])
+    rows = compute_indicators("002594", df, "日", ["RSI14"])
+    assert len(rows) == 1
+    assert rows[0]["指标名"] == "RSI14"
+    assert rows[0]["信号状态"] == "超买"
+
+
+def test_kdj_emits_three_subindicators():
+    df = _make_df([10.0 + 0.1 * i for i in range(60)])
+    rows = compute_indicators("002594", df, "日", ["KDJ"])
+    names = {r["指标名"] for r in rows}
+    assert names == {"KDJ-K", "KDJ-D", "KDJ-J"}
+
+
+def test_boll_emits_three_subindicators():
+    df = _make_df([10.0 + 0.1 * i for i in range(60)])
+    rows = compute_indicators("002594", df, "日", ["BOLL"])
+    names = {r["指标名"] for r in rows}
+    assert names == {"BOLL-UPPER", "BOLL-MID", "BOLL-LOWER"}
+    for r in rows:
+        assert r["信号状态"] == ""
+
+
+def test_unknown_indicator_is_silently_skipped():
+    df = _make_df([float(i) for i in range(1, 31)])
+    rows = compute_indicators("002594", df, "日", ["MA5", "UNKNOWN_INDICATOR_X"])
+    assert len(rows) == 1
+    assert rows[0]["指标名"] == "MA5"
+
+
+def test_skips_indicator_when_insufficient_history():
+    df = _make_df([1.0, 2.0, 3.0, 4.0, 5.0])
+    rows = compute_indicators("002594", df, "日", ["MA5", "MA20"])
+    assert len(rows) == 1
+    assert rows[0]["指标名"] == "MA5"
+
+
+def test_compound_key_format():
+    df = _make_df([float(i) for i in range(1, 31)])
+    rows = compute_indicators("300750", df, "周", ["MA10"])
+    assert len(rows) == 1
+    assert rows[0]["复合主键"] == "300750_周_MA10"
