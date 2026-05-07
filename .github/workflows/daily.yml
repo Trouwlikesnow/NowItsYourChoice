@@ -1,0 +1,52 @@
+name: Daily Investment Data Update
+
+on:
+  schedule:
+    # 北京时间 15:30 = UTC 07:30，工作日（周一-周五）
+    - cron: "30 7 * * 1-5"
+  workflow_dispatch: {}
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Run daily update
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_BASE_APP_TOKEN: ${{ secrets.FEISHU_BASE_APP_TOKEN }}
+          TABLE_ID_SECTORS: ${{ secrets.TABLE_ID_SECTORS }}
+          TABLE_ID_TICKERS: ${{ secrets.TABLE_ID_TICKERS }}
+          TABLE_ID_INDICATORS: ${{ secrets.TABLE_ID_INDICATORS }}
+          TABLE_ID_PRICE_SNAPSHOTS: ${{ secrets.TABLE_ID_PRICE_SNAPSHOTS }}
+          TABLE_ID_SECTOR_NEWS: ${{ secrets.TABLE_ID_SECTOR_NEWS }}
+          TABLE_ID_DECISIONS: ${{ secrets.TABLE_ID_DECISIONS }}
+          TABLE_ID_TRADING_RULES: ${{ secrets.TABLE_ID_TRADING_RULES }}
+        run: python -m scripts.main
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs
+          path: "*.log"
+          retention-days: 7
