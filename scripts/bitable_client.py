@@ -59,3 +59,19 @@ class BitableClient:
                 break
             page_token = payload.get("page_token")
         return out
+
+    def batch_create(
+        self, table_id: str, records: list[dict], chunk_size: int = 500
+    ) -> None:
+        url = (
+            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
+            f"/tables/{table_id}/records/batch_create"
+        )
+        for i in range(0, len(records), chunk_size):
+            chunk = records[i : i + chunk_size]
+            payload = {"records": [{"fields": r} for r in chunk]}
+            resp = requests.post(url, headers=self._headers(), json=payload, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("code") != 0:
+                raise RuntimeError(f"Feishu batch_create error: {data}")

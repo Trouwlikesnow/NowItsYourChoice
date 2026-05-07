@@ -53,3 +53,15 @@ def test_list_records_returns_items_across_pages(mocker):
     assert records[0]["record_id"] == "r1"
     assert records[1]["record_id"] == "r2"
     assert get.call_count == 2
+
+
+def test_batch_create_chunks_and_calls_api(mocker):
+    mocker.patch.object(BitableClient, "_get_tenant_access_token", return_value="t")
+    post = mocker.patch(
+        "scripts.bitable_client.requests.post",
+        return_value=_resp({"code": 0, "data": {"records": []}}),
+    )
+    client = BitableClient("app", "secret", "base")
+    records = [{"代码": str(i)} for i in range(1200)]
+    client.batch_create("tbl", records)
+    assert post.call_count == 3
