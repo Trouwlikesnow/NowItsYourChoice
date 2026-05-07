@@ -2,6 +2,10 @@ import time
 
 import requests
 
+_AUTH_TIMEOUT_SEC = 15
+_DATA_TIMEOUT_SEC = 20
+_TOKEN_REFRESH_BUFFER_SEC = 60
+
 
 class BitableClient:
     BASE_URL = "https://open.feishu.cn/open-apis"
@@ -15,12 +19,12 @@ class BitableClient:
 
     def _get_tenant_access_token(self) -> str:
         now = time.time()
-        if self._token and now < self._token_expires_at - 60:
+        if self._token and now < self._token_expires_at - _TOKEN_REFRESH_BUFFER_SEC:
             return self._token
         resp = requests.post(
             f"{self.BASE_URL}/auth/v3/tenant_access_token/internal",
             json={"app_id": self.app_id, "app_secret": self.app_secret},
-            timeout=15,
+            timeout=_AUTH_TIMEOUT_SEC,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -33,13 +37,16 @@ class BitableClient:
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._get_tenant_access_token()}"}
 
+    def _records_url(self, table_id: str, suffix: str = "") -> str:
+        return (
+            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
+            f"/tables/{table_id}/records{suffix}"
+        )
+
     def list_records(
         self, table_id: str, page_size: int = 500, filter_: str | None = None
     ) -> list[dict]:
-        url = (
-            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
-            f"/tables/{table_id}/records"
-        )
+        url = self._records_url(table_id)
         page_token: str | None = None
         out: list[dict] = []
         while True:
@@ -48,7 +55,7 @@ class BitableClient:
                 params["page_token"] = page_token
             if filter_:
                 params["filter"] = filter_
-            resp = requests.get(url, headers=self._headers(), params=params, timeout=20)
+            resp = requests.get(url, headers=self._headers(), params=params, timeout=_DATA_TIMEOUT_SEC)
             resp.raise_for_status()
             data = resp.json()
             if data.get("code") != 0:
@@ -63,14 +70,11 @@ class BitableClient:
     def batch_create(
         self, table_id: str, records: list[dict], chunk_size: int = 500
     ) -> None:
-        url = (
-            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
-            f"/tables/{table_id}/records/batch_create"
-        )
+        url = self._records_url(table_id, "/batch_create")
         for i in range(0, len(records), chunk_size):
             chunk = records[i : i + chunk_size]
             payload = {"records": [{"fields": r} for r in chunk]}
-            resp = requests.post(url, headers=self._headers(), json=payload, timeout=20)
+            resp = requests.post(url, headers=self._headers(), json=payload, timeout=_DATA_TIMEOUT_SEC)
             resp.raise_for_status()
             data = resp.json()
             if data.get("code") != 0:
@@ -79,14 +83,11 @@ class BitableClient:
     def batch_delete(
         self, table_id: str, record_ids: list[str], chunk_size: int = 500
     ) -> None:
-        url = (
-            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
-            f"/tables/{table_id}/records/batch_delete"
-        )
+        url = self._records_url(table_id, "/batch_delete")
         for i in range(0, len(record_ids), chunk_size):
             chunk = record_ids[i : i + chunk_size]
             resp = requests.post(
-                url, headers=self._headers(), json={"records": chunk}, timeout=20
+                url, headers=self._headers(), json={"records": chunk}, timeout=_DATA_TIMEOUT_SEC
             )
             resp.raise_for_status()
             data = resp.json()
@@ -94,11 +95,8 @@ class BitableClient:
                 raise RuntimeError(f"Feishu batch_delete error: {data}")
 
     def update_record(self, table_id: str, record_id: str, fields: dict) -> None:
-        url = (
-            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
-            f"/tables/{table_id}/records/{record_id}"
-        )
-        resp = requests.put(url, headers=self._headers(), json={"fields": fields}, timeout=20)
+        url = self._records_url(table_id, f"/{record_id}")
+        resp = requests.put(url, headers=self._headers(), json={"fields": fields}, timeout=_DATA_TIMEOUT_SEC)
         resp.raise_for_status()
         data = resp.json()
         if data.get("code") != 0:
