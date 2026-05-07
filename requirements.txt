@@ -1,6 +1,6 @@
-akshare==1.14.50
-pandas==2.2.2
-pandas-ta==0.3.14b0
+akshare==1.18.60
+pandas==2.3.3
+pandas-ta==0.4.71b0
 requests==2.32.3
 python-dotenv==1.0.1
 pyyaml==6.0.1
