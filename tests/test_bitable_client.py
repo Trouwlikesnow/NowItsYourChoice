@@ -77,3 +77,14 @@ def test_batch_delete_chunks_record_ids(mocker):
     ids = [f"r{i}" for i in range(1100)]
     client.batch_delete("tbl", ids)
     assert post.call_count == 3
+
+
+def test_update_record_calls_put(mocker):
+    mocker.patch.object(BitableClient, "_get_tenant_access_token", return_value="t")
+    put = mocker.patch(
+        "scripts.bitable_client.requests.put",
+        return_value=_resp({"code": 0}),
+    )
+    client = BitableClient("app", "secret", "base")
+    client.update_record("tbl", "rec1", {"a": 1})
+    assert put.call_count == 1
