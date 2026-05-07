@@ -92,3 +92,14 @@ class BitableClient:
             data = resp.json()
             if data.get("code") != 0:
                 raise RuntimeError(f"Feishu batch_delete error: {data}")
+
+    def update_record(self, table_id: str, record_id: str, fields: dict) -> None:
+        url = (
+            f"{self.BASE_URL}/bitable/v1/apps/{self.base_app_token}"
+            f"/tables/{table_id}/records/{record_id}"
+        )
+        resp = requests.put(url, headers=self._headers(), json={"fields": fields}, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("code") != 0:
+            raise RuntimeError(f"Feishu update_record error: {data}")
