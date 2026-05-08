@@ -2,12 +2,26 @@ import logging
 import traceback
 from datetime import datetime, timedelta
 
+import pandas as pd
+
 from scripts.bitable_client import BitableClient
 from scripts.config import load_config
 from scripts.data_fetcher import fetch_kline, fetch_sector_news
 from scripts.indicator_calc import compute_indicators
 
 log = logging.getLogger(__name__)
+
+
+def _to_ms(value):
+    # Feishu date/datetime fields require millisecond Unix timestamps, not strings.
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    try:
+        return int(pd.Timestamp(value).timestamp() * 1000)
+    except (ValueError, TypeError):
+        return None
 
 
 def process_ticker(ticker, cfg, bitable):
@@ -22,6 +36,9 @@ def process_ticker(ticker, cfg, bitable):
 
         rows = compute_indicators(code, df, period, indicator_list)
         if rows:
+            for r in rows:
+                if "更新时间" in r:
+                    r["更新时间"] = _to_ms(r["更新时间"])
             old = bitable.list_records(
                 cfg.tables.indicators,
                 filter_=f'AND(CurrentValue.[股票代码] = "{code}", CurrentValue.[周期] = "{period}")',
@@ -41,7 +58,7 @@ def process_ticker(ticker, cfg, bitable):
         snapshot_row = {
             "复合主键": f"{code}_{date_str}",
             "股票代码": code,
-            "交易日": str(last["date"].date()),
+            "交易日": _to_ms(last["date"]),
             "开盘价": float(last["open"]),
             "收盘价": last_close,
             "最高价": float(last["high"]),
@@ -65,31 +82,30 @@ def process_ticker(ticker, cfg, bitable):
             "60日最高": high60,
             "60日最低": low60,
             "距高点回撤%": round((last_close / high60 - 1) * 100, 2),
-            "最后更新时间": str(last["date"].date()),
+            "最后更新时间": _to_ms(last["date"]),
         }
         bitable.update_record(cfg.tables.tickers, ticker["record_id"], update_fields)
 
 
 def cleanup_rolling_window(cfg, bitable, today=None):
     today_dt = datetime.fromisoformat(today) if today else datetime.now()
-    snap_cutoff = (today_dt - timedelta(days=cfg.snapshot_window_days)).date().isoformat()
-    news_cutoff = (today_dt - timedelta(days=cfg.news_window_days)).date().isoformat()
+    snap_cutoff_ms = _to_ms(today_dt - timedelta(days=cfg.snapshot_window_days))
+    news_cutoff_ms = _to_ms(today_dt - timedelta(days=cfg.news_window_days))
 
     snaps = bitable.list_records(cfg.tables.price_snapshots)
-    expired_snaps = [
-        r["record_id"]
-        for r in snaps
-        if r.get("fields", {}).get("交易日") and r["fields"]["交易日"] < snap_cutoff
-    ]
+    expired_snaps = []
+    for r in snaps:
+        ms = _to_ms(r.get("fields", {}).get("交易日"))
+        if ms is not None and ms < snap_cutoff_ms:
+            expired_snaps.append(r["record_id"])
     if expired_snaps:
         bitable.batch_delete(cfg.tables.price_snapshots, expired_snaps)
 
     news = bitable.list_records(cfg.tables.sector_news)
     expired_news = []
     for r in news:
-        published = r.get("fields", {}).get("发布时间", "")
-        prefix = published[:10] if published else ""
-        if prefix and prefix < news_cutoff:
+        ms = _to_ms(r.get("fields", {}).get("发布时间"))
+        if ms is not None and ms < news_cutoff_ms:
             expired_news.append(r["record_id"])
     if expired_news:
         bitable.batch_delete(cfg.tables.sector_news, expired_news)
@@ -127,7 +143,7 @@ def main():
                         "摘要": n.get("summary"),
                         "来源": n.get("source"),
                         "URL": n.get("url"),
-                        "发布时间": n.get("published_at"),
+                        "发布时间": _to_ms(n.get("published_at")),
                     }
                     for n in news
                 ]
