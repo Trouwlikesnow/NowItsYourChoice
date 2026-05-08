@@ -1,0 +1,338 @@
+app:
+  description: 输入股票代码或名称，给出基于多周期技术指标 + 交易纪律的操作建议
+  icon: "🤖"
+  icon_background: "#FFEAD5"
+  mode: advanced-chat
+  name: 决策引擎
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.5
+workflow:
+  conversation_variables: []
+  environment_variables:
+    - id: env-feishu-app-id
+      name: FEISHU_APP_ID
+      value: ""
+      value_type: secret
+    - id: env-feishu-app-secret
+      name: FEISHU_APP_SECRET
+      value: ""
+      value_type: secret
+    - id: env-feishu-base-app-token
+      name: FEISHU_BASE_APP_TOKEN
+      value: ""
+      value_type: string
+    - id: env-table-tickers
+      name: TABLE_ID_TICKERS
+      value: ""
+      value_type: string
+    - id: env-table-indicators
+      name: TABLE_ID_INDICATORS
+      value: ""
+      value_type: string
+    - id: env-table-trading-rules
+      name: TABLE_ID_TRADING_RULES
+      value: ""
+      value_type: string
+  features:
+    file_upload:
+      enabled: false
+      allowed_file_types: []
+    opening_statement: |
+      你好！发送股票代码（如 `002594`）或股票名称（如 `比亚迪`），我会基于多周期技术指标与你的交易纪律给出操作建议。
+    suggested_questions:
+      - "002594"
+      - "688313"
+      - "002463"
+    suggested_questions_after_answer:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    text_to_speech:
+      enabled: false
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+  graph:
+    nodes:
+      - id: start
+        type: custom
+        position:
+          x: 80
+          y: 282
+        data:
+          type: start
+          title: 开始
+          desc: ""
+          variables: []
+
+      - id: http_token
+        type: custom
+        position:
+          x: 360
+          y: 282
+        data:
+          type: http-request
+          title: 获取 token
+          desc: 调用飞书开放平台拿 tenant_access_token
+          method: post
+          url: https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal
+          authorization:
+            type: no-auth
+            config: null
+          headers: |-
+            Content-Type:application/json
+          params: ""
+          body:
+            type: json
+            data: |-
+              {"app_id":"{{#env.FEISHU_APP_ID#}}","app_secret":"{{#env.FEISHU_APP_SECRET#}}"}
+          timeout:
+            max_connect_timeout: 10
+            max_read_timeout: 30
+            max_write_timeout: 30
+
+      - id: extract_token
+        type: custom
+        position:
+          x: 640
+          y: 282
+        data:
+          type: code
+          title: 提取 token
+          desc: 从 token 响应里拿 tenant_access_token
+          code_language: python3
+          code: |-
+            import json
+
+            def main(body: str) -> dict:
+                data = json.loads(body)
+                return {"token": data["tenant_access_token"]}
+          variables:
+            - variable: body
+              value_selector:
+                - http_token
+                - body
+              value_type: string
+          outputs:
+            token:
+              type: string
+
+      - id: http_ticker
+        type: custom
+        position:
+          x: 920
+          y: 282
+        data:
+          type: http-request
+          title: 查标的表
+          desc: 按股票代码或名称从标的表过滤一行
+          method: get
+          url: https://open.feishu.cn/open-apis/bitable/v1/apps/{{#env.FEISHU_BASE_APP_TOKEN#}}/tables/{{#env.TABLE_ID_TICKERS#}}/records
+          authorization:
+            type: no-auth
+            config: null
+          headers: |-
+            Authorization:Bearer {{#extract_token.token#}}
+          params: |-
+            filter:OR(CurrentValue.[股票代码] = "{{#sys.query#}}", CurrentValue.[股票名称] = "{{#sys.query#}}")
+          body:
+            type: none
+            data: ""
+          timeout:
+            max_connect_timeout: 10
+            max_read_timeout: 30
+            max_write_timeout: 30
+
+      - id: http_indicators
+        type: custom
+        position:
+          x: 1200
+          y: 282
+        data:
+          type: http-request
+          title: 查指标表
+          desc: 拉该股票全部周期+指标
+          method: get
+          url: https://open.feishu.cn/open-apis/bitable/v1/apps/{{#env.FEISHU_BASE_APP_TOKEN#}}/tables/{{#env.TABLE_ID_INDICATORS#}}/records
+          authorization:
+            type: no-auth
+            config: null
+          headers: |-
+            Authorization:Bearer {{#extract_token.token#}}
+          params: |-
+            filter:CurrentValue.[股票代码] = "{{#sys.query#}}"
+            page_size:100
+          body:
+            type: none
+            data: ""
+          timeout:
+            max_connect_timeout: 10
+            max_read_timeout: 30
+            max_write_timeout: 30
+
+      - id: http_rules
+        type: custom
+        position:
+          x: 1480
+          y: 282
+        data:
+          type: http-request
+          title: 查交易纪律
+          desc: 拉所有启用的交易纪律
+          method: get
+          url: https://open.feishu.cn/open-apis/bitable/v1/apps/{{#env.FEISHU_BASE_APP_TOKEN#}}/tables/{{#env.TABLE_ID_TRADING_RULES#}}/records
+          authorization:
+            type: no-auth
+            config: null
+          headers: |-
+            Authorization:Bearer {{#extract_token.token#}}
+          params: |-
+            filter:CurrentValue.[状态] = "启用"
+            page_size:100
+          body:
+            type: none
+            data: ""
+          timeout:
+            max_connect_timeout: 10
+            max_read_timeout: 30
+            max_write_timeout: 30
+
+      - id: llm_decision
+        type: custom
+        position:
+          x: 1760
+          y: 282
+        data:
+          type: llm
+          title: 决策生成
+          desc: DeepSeek 综合所有上下文，输出 4 段建议
+          model:
+            provider: langgenius/deepseek/deepseek
+            name: deepseek-chat
+            mode: chat
+            completion_params:
+              temperature: 0.3
+              max_tokens: 2000
+          prompt_template:
+            - role: system
+              text: |-
+                你是一位严谨的 A 股投资分析助手。基于多周期技术指标、用户的交易纪律，给出操作建议。
+                保持中立审慎；明确指出关键数据；信息不充分时直接说明。
+
+                请严格按以下四段 Markdown 格式输出，每段以 `## ` 开头：
+
+                ## 操作建议
+                （明确动作：建议轻仓买入 / 持有观望 / 减仓一半 / 卖出，并说明仓位比例）
+
+                ## 关键依据
+                （3-5 条核心理由，结合日/周/月线指标和价格位置）
+
+                ## 风险提示
+                （2-3 条主要风险点）
+
+                ## 适用纪律
+                （本次决策遵循/触发的具体纪律条款，引用纪律标题）
+            - role: user
+              text: |-
+                用户输入: {{#sys.query#}}
+
+                # 标的基础信息（来自飞书 Bitable，JSON 格式，请只关注 fields 部分）
+                {{#http_ticker.body#}}
+
+                # 多周期技术指标（同上，关注 fields 里的 周期/指标名/当前值/前值/信号状态）
+                {{#http_indicators.body#}}
+
+                # 适用的交易纪律（同上，关注 fields 里的 纪律标题/类型/优先级/详细描述）
+                {{#http_rules.body#}}
+
+                请按四段格式输出对该股票的操作建议。
+          context:
+            enabled: false
+            variable_selector: []
+          memory:
+            role_prefix: ""
+            window:
+              enabled: false
+              size: 0
+          variables: []
+          vision:
+            enabled: false
+
+      - id: answer
+        type: custom
+        position:
+          x: 2040
+          y: 282
+        data:
+          type: answer
+          title: 直接回复
+          desc: 把 LLM 输出转给用户
+          answer: "{{#llm_decision.text#}}"
+          variables: []
+
+    edges:
+      - id: edge-start-token
+        source: start
+        target: http_token
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: start
+          targetType: http-request
+      - id: edge-token-extract
+        source: http_token
+        target: extract_token
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: http-request
+          targetType: code
+      - id: edge-extract-ticker
+        source: extract_token
+        target: http_ticker
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: code
+          targetType: http-request
+      - id: edge-ticker-indicators
+        source: http_ticker
+        target: http_indicators
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: http-request
+          targetType: http-request
+      - id: edge-indicators-rules
+        source: http_indicators
+        target: http_rules
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: http-request
+          targetType: http-request
+      - id: edge-rules-llm
+        source: http_rules
+        target: llm_decision
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: http-request
+          targetType: llm
+      - id: edge-llm-answer
+        source: llm_decision
+        target: answer
+        sourceHandle: source
+        targetHandle: target
+        type: custom
+        data:
+          sourceType: llm
+          targetType: answer
