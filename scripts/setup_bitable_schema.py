@@ -142,6 +142,76 @@ def schema_for_trading_rules() -> list[FieldDef]:
     ]
 
 
+def schema_for_trades() -> list[FieldDef]:
+    return [
+        FieldDef("交易时间", FT_DATE_TIME, dict(DATETIME_PROP)),
+        FieldDef("股票代码", FT_TEXT),
+        FieldDef("股票名称", FT_TEXT),
+        FieldDef("方向", FT_SINGLE_SELECT, {"options": [
+            {"name": "买入"}, {"name": "卖出"},
+        ]}),
+        FieldDef("成交价", FT_NUMBER),
+        FieldDef("成交数量", FT_NUMBER),
+        FieldDef("成交金额", FT_NUMBER),
+        FieldDef("佣金", FT_NUMBER),
+        FieldDef("印花税", FT_NUMBER),
+        FieldDef("过户费", FT_NUMBER),
+        FieldDef("手续费合计", FT_NUMBER),
+        FieldDef("券商", FT_SINGLE_SELECT, {"options": [
+            {"name": "招商"}, {"name": "华泰"},
+        ]}),
+        FieldDef("来源", FT_SINGLE_SELECT, {"options": [
+            {"name": "截图识别"}, {"name": "手动录入"},
+        ]}),
+        FieldDef("识别状态", FT_SINGLE_SELECT, {"options": [
+            {"name": "已确认"}, {"name": "待确认"}, {"name": "识别失败"},
+        ]}),
+    ]
+
+
+def schema_for_portfolio(sectors_table_id: str) -> list[FieldDef]:
+    return [
+        FieldDef("股票代码", FT_TEXT),
+        FieldDef("股票名称", FT_TEXT),
+        FieldDef("券商", FT_SINGLE_SELECT, {"options": [
+            {"name": "招商"}, {"name": "华泰"},
+        ]}),
+        FieldDef("资金属性", FT_SINGLE_SELECT, {"options": [
+            {"name": "自有"}, {"name": "代管"},
+        ]}),
+        FieldDef("所属板块", FT_DUPLEX_LINK, {"table_id": sectors_table_id, "multiple": True}),
+        FieldDef("持仓数量", FT_NUMBER),
+        FieldDef("成本价", FT_NUMBER),
+        FieldDef("成本金额", FT_NUMBER),
+        FieldDef("当前价", FT_NUMBER),
+        FieldDef("市值", FT_NUMBER),
+        FieldDef("浮盈额", FT_NUMBER),
+        FieldDef("浮盈%", FT_NUMBER),
+        FieldDef("仓位占比%", FT_NUMBER),
+        FieldDef("仓位预警", FT_SINGLE_SELECT, {"options": [
+            {"name": "正常"}, {"name": "超标"},
+        ]}),
+    ]
+
+
+def schema_for_asset_snapshots() -> list[FieldDef]:
+    return [
+        FieldDef("日期", FT_DATE_TIME, dict(DATE_PROP)),
+        FieldDef("券商", FT_SINGLE_SELECT, {"options": [
+            {"name": "招商"}, {"name": "华泰"}, {"name": "全部"},
+        ]}),
+        FieldDef("资金属性", FT_SINGLE_SELECT, {"options": [
+            {"name": "自有"}, {"name": "代管"}, {"name": "全部"},
+        ]}),
+        FieldDef("总市值", FT_NUMBER),
+        FieldDef("总成本", FT_NUMBER),
+        FieldDef("总浮盈", FT_NUMBER),
+        FieldDef("总浮盈%", FT_NUMBER),
+        FieldDef("当日盈亏", FT_NUMBER),
+        FieldDef("持仓只数", FT_NUMBER),
+    ]
+
+
 def _list_fields(client, table_id):
     url = f"{client.BASE_URL}/bitable/v1/apps/{client.base_app_token}/tables/{table_id}/fields"
     out = []
@@ -232,6 +302,9 @@ def main():
         "sector_news": os.environ["TABLE_ID_SECTOR_NEWS"],
         "decisions": os.environ["TABLE_ID_DECISIONS"],
         "trading_rules": os.environ["TABLE_ID_TRADING_RULES"],
+        "trades": os.environ["TABLE_ID_TRADES"],
+        "portfolio": os.environ["TABLE_ID_PORTFOLIO"],
+        "asset_snapshots": os.environ["TABLE_ID_ASSET_SNAPSHOTS"],
     }
 
     # Order matters: 板块表 must exist before tables that link to it
@@ -242,6 +315,9 @@ def main():
     sync_table(client, tables["sector_news"], "板块新闻表", schema_for_sector_news(tables["sectors"]))
     sync_table(client, tables["decisions"], "决策记录表", schema_for_decisions())
     sync_table(client, tables["trading_rules"], "交易纪律表", schema_for_trading_rules())
+    sync_table(client, tables["trades"], "交易记录表", schema_for_trades())
+    sync_table(client, tables["portfolio"], "持仓表", schema_for_portfolio(tables["sectors"]))
+    sync_table(client, tables["asset_snapshots"], "资产快照表", schema_for_asset_snapshots())
 
     print("\n✅ Schema sync complete.")
 

@@ -6,6 +6,9 @@ from scripts.setup_bitable_schema import (
     schema_for_sector_news,
     schema_for_decisions,
     schema_for_trading_rules,
+    schema_for_trades,
+    schema_for_portfolio,
+    schema_for_asset_snapshots,
     FT_TEXT, FT_NUMBER, FT_SINGLE_SELECT, FT_DATE_TIME, FT_URL, FT_DUPLEX_LINK,
 )
 
@@ -60,3 +63,32 @@ def test_trading_rules_schema_well_formed():
 
 def test_price_snapshots_schema_well_formed():
     _assert_well_formed(schema_for_price_snapshots())
+
+
+def test_trades_schema_well_formed():
+    schema = schema_for_trades()
+    _assert_well_formed(schema)
+    names = {f.name for f in schema}
+    assert {"交易时间", "股票代码", "股票名称", "方向", "成交价", "成交数量",
+            "成交金额", "佣金", "印花税", "过户费", "手续费合计", "券商",
+            "来源", "识别状态"}.issubset(names)
+    direction_field = next(f for f in schema if f.name == "方向")
+    option_names = {o["name"] for o in direction_field.property["options"]}
+    assert option_names == {"买入", "卖出"}
+
+
+def test_portfolio_schema_well_formed_and_links_to_sectors():
+    schema = schema_for_portfolio("tbl_sec_dummy")
+    _assert_well_formed(schema, with_link_to="tbl_sec_dummy")
+    names = {f.name for f in schema}
+    assert {"股票代码", "股票名称", "券商", "资金属性", "所属板块", "持仓数量",
+            "成本价", "成本金额", "当前价", "市值", "浮盈额", "浮盈%",
+            "仓位占比%", "仓位预警"}.issubset(names)
+
+
+def test_asset_snapshots_schema_well_formed():
+    schema = schema_for_asset_snapshots()
+    _assert_well_formed(schema)
+    names = {f.name for f in schema}
+    assert {"日期", "券商", "资金属性", "总市值", "总成本", "总浮盈",
+            "总浮盈%", "当日盈亏", "持仓只数"}.issubset(names)
