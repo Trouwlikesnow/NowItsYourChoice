@@ -1,0 +1,15 @@
+name = "niyc-trade-worker"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+
+[vars]
+LLM_MODEL = "gpt-4o"
+
+# Secrets (set via `wrangler secret put <NAME>`):
+# FEISHU_APP_ID
+# FEISHU_APP_SECRET
+# FEISHU_VERIFICATION_TOKEN
+# FEISHU_BASE_APP_TOKEN
+# TABLE_ID_TRADES
+# LLM_API_BASE
+# LLM_API_KEY
