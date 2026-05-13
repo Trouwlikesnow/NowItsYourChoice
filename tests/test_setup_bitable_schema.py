@@ -71,7 +71,7 @@ def test_trades_schema_well_formed():
     names = {f.name for f in schema}
     assert {"交易时间", "股票代码", "股票名称", "方向", "成交价", "成交数量",
             "成交金额", "佣金", "印花税", "过户费", "手续费合计", "券商",
-            "来源", "识别状态"}.issubset(names)
+            "来源", "识别状态", "已同步"}.issubset(names)
     direction_field = next(f for f in schema if f.name == "方向")
     option_names = {o["name"] for o in direction_field.property["options"]}
     assert option_names == {"买入", "卖出"}

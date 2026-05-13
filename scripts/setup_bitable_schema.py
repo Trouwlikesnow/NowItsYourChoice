@@ -166,6 +166,9 @@ def schema_for_trades() -> list[FieldDef]:
         FieldDef("识别状态", FT_SINGLE_SELECT, {"options": [
             {"name": "已确认"}, {"name": "待确认"}, {"name": "识别失败"},
         ]}),
+        FieldDef("已同步", FT_SINGLE_SELECT, {"options": [
+            {"name": "是"}, {"name": "否"},
+        ]}),
     ]
 
 
