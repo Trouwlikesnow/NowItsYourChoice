@@ -28,6 +28,9 @@ def _cfg():
     cfg.tables.sector_news = "tbl_news"
     cfg.snapshot_window_days = 90
     cfg.news_window_days = 60
+    cfg.tables.trades = "tbl_trades"
+    cfg.tables.portfolio = "tbl_pf"
+    cfg.tables.asset_snapshots = "tbl_as"
     return cfg
 
 
@@ -160,3 +163,28 @@ def test_main_continues_when_one_ticker_fails(mocker):
     main()
 
     assert pt.call_count == 2
+
+
+def test_main_calls_portfolio_functions(mocker):
+    mocker.patch("scripts.main.load_config", return_value=_cfg())
+    bitable = MagicMock()
+    bitable.list_records.side_effect = lambda table_id, **kwargs: []
+    mocker.patch("scripts.main.BitableClient", return_value=bitable)
+    mocker.patch("scripts.main.process_ticker")
+    mocker.patch("scripts.main.fetch_sector_news", return_value=[])
+    mocker.patch("scripts.main.cleanup_rolling_window")
+
+    sync = mocker.patch("scripts.main.sync_portfolio")
+    refresh = mocker.patch("scripts.main.refresh_market_values")
+    alerts = mocker.patch("scripts.main.check_position_alerts")
+    snapshot = mocker.patch("scripts.main.take_asset_snapshot")
+    cleanup_as = mocker.patch("scripts.main.cleanup_asset_snapshots")
+
+    from scripts.main import main
+    main()
+
+    sync.assert_called_once()
+    refresh.assert_called_once()
+    alerts.assert_called_once()
+    snapshot.assert_called_once()
+    cleanup_as.assert_called_once()

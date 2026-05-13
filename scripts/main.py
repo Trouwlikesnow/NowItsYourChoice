@@ -8,6 +8,13 @@ from scripts.bitable_client import BitableClient
 from scripts.config import load_config
 from scripts.data_fetcher import fetch_kline, fetch_sector_news
 from scripts.indicator_calc import compute_indicators
+from scripts.portfolio import (
+    sync_portfolio,
+    refresh_market_values,
+    check_position_alerts,
+    take_asset_snapshot,
+    cleanup_asset_snapshots,
+)
 
 log = logging.getLogger(__name__)
 
@@ -152,6 +159,13 @@ def main():
             log.error("sector %s news failed: %s", sector_code, e)
 
     cleanup_rolling_window(cfg, bitable)
+
+    # --- Phase 2: Portfolio management ---
+    sync_portfolio(cfg, bitable)
+    refresh_market_values(cfg, bitable)
+    check_position_alerts(cfg, bitable)
+    take_asset_snapshot(cfg, bitable)
+    cleanup_asset_snapshots(cfg, bitable)
 
     if failed:
         log.warning("failed tickers: %s", failed)

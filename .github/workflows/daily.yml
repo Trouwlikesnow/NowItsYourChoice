@@ -41,6 +41,9 @@ jobs:
           TABLE_ID_SECTOR_NEWS: ${{ secrets.TABLE_ID_SECTOR_NEWS }}
           TABLE_ID_DECISIONS: ${{ secrets.TABLE_ID_DECISIONS }}
           TABLE_ID_TRADING_RULES: ${{ secrets.TABLE_ID_TRADING_RULES }}
+          TABLE_ID_TRADES: ${{ secrets.TABLE_ID_TRADES }}
+          TABLE_ID_PORTFOLIO: ${{ secrets.TABLE_ID_PORTFOLIO }}
+          TABLE_ID_ASSET_SNAPSHOTS: ${{ secrets.TABLE_ID_ASSET_SNAPSHOTS }}
         run: python -m scripts.main
 
       - name: Upload logs on failure
