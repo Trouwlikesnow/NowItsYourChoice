@@ -12,6 +12,9 @@ ALL_ENV_VARS = [
     "TABLE_ID_SECTOR_NEWS",
     "TABLE_ID_DECISIONS",
     "TABLE_ID_TRADING_RULES",
+    "TABLE_ID_TRADES",
+    "TABLE_ID_PORTFOLIO",
+    "TABLE_ID_ASSET_SNAPSHOTS",
 ]
 
 
@@ -32,6 +35,9 @@ def _set_all_env(monkeypatch):
     monkeypatch.setenv("TABLE_ID_SECTOR_NEWS", "t_news")
     monkeypatch.setenv("TABLE_ID_DECISIONS", "t_dec")
     monkeypatch.setenv("TABLE_ID_TRADING_RULES", "t_rul")
+    monkeypatch.setenv("TABLE_ID_TRADES", "t_trd")
+    monkeypatch.setenv("TABLE_ID_PORTFOLIO", "t_pf")
+    monkeypatch.setenv("TABLE_ID_ASSET_SNAPSHOTS", "t_as")
 
 
 def test_load_config_reads_env(monkeypatch):
@@ -50,6 +56,9 @@ def test_load_config_reads_env(monkeypatch):
     assert cfg.tables.sector_news == "t_news"
     assert cfg.tables.decisions == "t_dec"
     assert cfg.tables.trading_rules == "t_rul"
+    assert cfg.tables.trades == "t_trd"
+    assert cfg.tables.portfolio == "t_pf"
+    assert cfg.tables.asset_snapshots == "t_as"
 
 
 def test_load_config_default_indicator_periods(monkeypatch):

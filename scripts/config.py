@@ -13,6 +13,9 @@ class TableIds:
     sector_news: str
     decisions: str
     trading_rules: str
+    trades: str
+    portfolio: str
+    asset_snapshots: str
 
 
 @dataclass
@@ -42,6 +45,9 @@ def load_config() -> Config:
         sector_news=os.environ["TABLE_ID_SECTOR_NEWS"],
         decisions=os.environ["TABLE_ID_DECISIONS"],
         trading_rules=os.environ["TABLE_ID_TRADING_RULES"],
+        trades=os.environ["TABLE_ID_TRADES"],
+        portfolio=os.environ["TABLE_ID_PORTFOLIO"],
+        asset_snapshots=os.environ["TABLE_ID_ASSET_SNAPSHOTS"],
     )
     return Config(
         feishu_app_id=os.environ["FEISHU_APP_ID"],
