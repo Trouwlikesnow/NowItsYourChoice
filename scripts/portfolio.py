@@ -188,17 +188,59 @@ def sync_portfolio(cfg, bitable) -> None:
             )
 
 
-def refresh_market_values(cfg, bitable) -> None:
-    """Update portfolio market values using latest closing prices from tickers table."""
-    positions = bitable.list_records(cfg.tables.portfolio)
-    tickers = bitable.list_records(cfg.tables.tickers)
+def _build_price_map(cfg, bitable) -> dict[str, float]:
+    """Build code→price map from tickers table + akshare for missing codes."""
+    import akshare as ak
 
-    price_map = {}
+    price_map: dict[str, float] = {}
+
+    # 1. From tickers table (already fetched by daily job)
+    tickers = bitable.list_records(cfg.tables.tickers)
     for t in tickers:
         code = _text(t["fields"].get("股票代码"))
         price = _num(t["fields"].get("最新收盘价"))
         if code and price:
             price_map[code] = price
+
+    # 2. Collect missing codes from portfolio
+    positions = bitable.list_records(cfg.tables.portfolio)
+    missing = set()
+    for p in positions:
+        code = _text(p["fields"].get("股票代码"))
+        if code and code not in price_map and _num(p["fields"].get("持仓数量")) > 0:
+            missing.add(code)
+
+    if not missing:
+        return price_map
+
+    # 3. Try ETF spot data
+    try:
+        etf_df = ak.fund_etf_spot_em()
+        for _, row in etf_df.iterrows():
+            c = str(row["代码"])
+            if c in missing:
+                price_map[c] = float(row["最新价"])
+                missing.discard(c)
+    except Exception as e:
+        log.warning("ETF spot fetch failed: %s", e)
+
+    # 4. Remaining: try stock kline
+    for code in list(missing):
+        try:
+            from scripts.data_fetcher import fetch_kline
+            df = fetch_kline(code, days=5)
+            if not df.empty:
+                price_map[code] = float(df.iloc[-1]["close"])
+        except Exception as e:
+            log.warning("Price fetch failed for %s: %s", code, e)
+
+    return price_map
+
+
+def refresh_market_values(cfg, bitable) -> None:
+    """Update portfolio market values using latest prices."""
+    positions = bitable.list_records(cfg.tables.portfolio)
+    price_map = _build_price_map(cfg, bitable)
 
     for p in positions:
         code = _text(p["fields"].get("股票代码"))
