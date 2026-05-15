@@ -306,8 +306,10 @@ def take_asset_snapshot(cfg, bitable) -> None:
     rows = []
 
     def _make_row(broker_label, fund_label, pos_list):
-        mv = sum(_num(p["fields"].get("市值")) for p in pos_list)
-        cost = sum(_num(p["fields"].get("成本金额")) for p in pos_list)
+        # Only include positions that have a current price (skip missing data)
+        priced = [p for p in pos_list if _num(p["fields"].get("当前价")) > 0]
+        mv = sum(_num(p["fields"].get("市值")) for p in priced)
+        cost = sum(_num(p["fields"].get("成本金额")) for p in priced)
         profit = round(mv - cost, 2)
         profit_pct = round(profit / cost * 100, 2) if cost else 0.0
         prev_mv = yesterday_map.get((broker_label, fund_label), 0.0)
