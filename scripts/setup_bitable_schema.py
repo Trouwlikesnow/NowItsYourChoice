@@ -25,6 +25,12 @@ FT_DUPLEX_LINK = 21
 DATE_PROP = {"date_formatter": "yyyy/MM/dd", "auto_fill": False}
 DATETIME_PROP = {"date_formatter": "yyyy/MM/dd HH:mm", "auto_fill": False}
 
+# Number field formatters
+NUM_PRICE = {"formatter": "0.000"}       # 价格：3位小数
+NUM_AMOUNT = {"formatter": "0.00"}       # 金额/费用：2位小数
+NUM_QTY = {"formatter": "0"}             # 数量/只数：整数
+NUM_PCT = {"formatter": "0.00"}          # 百分比：2位小数
+
 
 @dataclass
 class FieldDef:
@@ -47,14 +53,14 @@ def schema_for_tickers(sectors_table_id: str) -> list[FieldDef]:
         FieldDef("股票代码", FT_TEXT),
         FieldDef("股票名称", FT_TEXT),
         FieldDef("所属板块", FT_DUPLEX_LINK, {"table_id": sectors_table_id, "multiple": True}),
-        FieldDef("当前持有", FT_NUMBER),
-        FieldDef("成本价", FT_NUMBER),
-        FieldDef("最新收盘价", FT_NUMBER),
-        FieldDef("当日涨跌幅", FT_NUMBER),
-        FieldDef("当日成交量", FT_NUMBER),
-        FieldDef("60日最高", FT_NUMBER),
-        FieldDef("60日最低", FT_NUMBER),
-        FieldDef("距高点回撤%", FT_NUMBER),
+        FieldDef("当前持有", FT_NUMBER, dict(NUM_QTY)),
+        FieldDef("成本价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("最新收盘价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("当日涨跌幅", FT_NUMBER, dict(NUM_PCT)),
+        FieldDef("当日成交量", FT_NUMBER, dict(NUM_QTY)),
+        FieldDef("60日最高", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("60日最低", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("距高点回撤%", FT_NUMBER, dict(NUM_PCT)),
         FieldDef("最后更新时间", FT_DATE_TIME, dict(DATETIME_PROP)),
     ]
 
@@ -84,12 +90,12 @@ def schema_for_price_snapshots() -> list[FieldDef]:
         FieldDef("复合主键", FT_TEXT),
         FieldDef("股票代码", FT_TEXT),
         FieldDef("交易日", FT_DATE_TIME, dict(DATE_PROP)),
-        FieldDef("开盘价", FT_NUMBER),
-        FieldDef("收盘价", FT_NUMBER),
-        FieldDef("最高价", FT_NUMBER),
-        FieldDef("最低价", FT_NUMBER),
-        FieldDef("成交量", FT_NUMBER),
-        FieldDef("成交额", FT_NUMBER),
+        FieldDef("开盘价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("收盘价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("最高价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("最低价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("成交量", FT_NUMBER, dict(NUM_QTY)),
+        FieldDef("成交额", FT_NUMBER, dict(NUM_AMOUNT)),
     ]
 
 
@@ -150,13 +156,13 @@ def schema_for_trades() -> list[FieldDef]:
         FieldDef("方向", FT_SINGLE_SELECT, {"options": [
             {"name": "买入"}, {"name": "卖出"},
         ]}),
-        FieldDef("成交价", FT_NUMBER),
-        FieldDef("成交数量", FT_NUMBER),
-        FieldDef("成交金额", FT_NUMBER),
-        FieldDef("佣金", FT_NUMBER),
-        FieldDef("印花税", FT_NUMBER),
-        FieldDef("过户费", FT_NUMBER),
-        FieldDef("手续费合计", FT_NUMBER),
+        FieldDef("成交价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("成交数量", FT_NUMBER, dict(NUM_QTY)),
+        FieldDef("成交金额", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("佣金", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("印花税", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("过户费", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("手续费合计", FT_NUMBER, dict(NUM_AMOUNT)),
         FieldDef("券商", FT_SINGLE_SELECT, {"options": [
             {"name": "招商"}, {"name": "华泰"},
         ]}),
@@ -183,14 +189,14 @@ def schema_for_portfolio(sectors_table_id: str) -> list[FieldDef]:
             {"name": "自有"}, {"name": "代管"},
         ]}),
         FieldDef("所属板块", FT_DUPLEX_LINK, {"table_id": sectors_table_id, "multiple": True}),
-        FieldDef("持仓数量", FT_NUMBER),
-        FieldDef("成本价", FT_NUMBER),
-        FieldDef("成本金额", FT_NUMBER),
-        FieldDef("当前价", FT_NUMBER),
-        FieldDef("市值", FT_NUMBER),
-        FieldDef("浮盈额", FT_NUMBER),
-        FieldDef("浮盈%", FT_NUMBER),
-        FieldDef("仓位占比%", FT_NUMBER),
+        FieldDef("持仓数量", FT_NUMBER, dict(NUM_QTY)),
+        FieldDef("成本价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("成本金额", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("当前价", FT_NUMBER, dict(NUM_PRICE)),
+        FieldDef("市值", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("浮盈额", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("浮盈%", FT_NUMBER, dict(NUM_PCT)),
+        FieldDef("仓位占比%", FT_NUMBER, dict(NUM_PCT)),
         FieldDef("仓位预警", FT_SINGLE_SELECT, {"options": [
             {"name": "正常"}, {"name": "超标"},
         ]}),
@@ -206,12 +212,12 @@ def schema_for_asset_snapshots() -> list[FieldDef]:
         FieldDef("资金属性", FT_SINGLE_SELECT, {"options": [
             {"name": "自有"}, {"name": "代管"}, {"name": "全部"},
         ]}),
-        FieldDef("总市值", FT_NUMBER),
-        FieldDef("总成本", FT_NUMBER),
-        FieldDef("总浮盈", FT_NUMBER),
-        FieldDef("总浮盈%", FT_NUMBER),
-        FieldDef("当日盈亏", FT_NUMBER),
-        FieldDef("持仓只数", FT_NUMBER),
+        FieldDef("总市值", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("总成本", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("总浮盈", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("总浮盈%", FT_NUMBER, dict(NUM_PCT)),
+        FieldDef("当日盈亏", FT_NUMBER, dict(NUM_AMOUNT)),
+        FieldDef("持仓只数", FT_NUMBER, dict(NUM_QTY)),
     ]
 
 
@@ -247,9 +253,11 @@ def _create_field(client, table_id, name, ftype, property=None):
         raise RuntimeError(f"create_field {name} error: {data}")
 
 
-def _update_field(client, table_id, field_id, name, ftype):
+def _update_field(client, table_id, field_id, name, ftype, property=None):
     url = f"{client.BASE_URL}/bitable/v1/apps/{client.base_app_token}/tables/{table_id}/fields/{field_id}"
     body = {"field_name": name, "type": ftype}
+    if property:
+        body["property"] = property
     resp = requests.put(url, headers=client._headers(), json=body, timeout=20)
     resp.raise_for_status()
     data = resp.json()
@@ -278,9 +286,20 @@ def sync_table(client, table_id: str, label: str, schema: list[FieldDef]) -> Non
         existing = _list_fields(client, table_id)
         existing_names = {f["field_name"] for f in existing}
 
+    existing_by_name = {f["field_name"]: f for f in existing}
+
     for fdef in schema:
         if fdef.name in existing_names:
-            print(f"= '{fdef.name}' exists, skipping")
+            # Update property (e.g. number formatter) if defined in schema
+            if fdef.property:
+                field = existing_by_name[fdef.name]
+                try:
+                    _update_field(client, table_id, field["field_id"], fdef.name, fdef.type, fdef.property)
+                    print(f"~ '{fdef.name}' property updated")
+                except (RuntimeError, requests.HTTPError) as e:
+                    print(f"! '{fdef.name}' property update failed: {e}")
+            else:
+                print(f"= '{fdef.name}' exists, skipping")
             continue
         try:
             _create_field(client, table_id, fdef.name, fdef.type, fdef.property)

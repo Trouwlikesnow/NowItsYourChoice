@@ -17,13 +17,8 @@ export async function createTradeRecord(
     body: JSON.stringify({ fields }),
   });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Bitable create failed: ${resp.status} ${text}`);
-  }
-
   const data = (await resp.json()) as { code: number; msg?: string };
-  if (data.code !== 0) {
-    throw new Error(`Bitable error: ${JSON.stringify(data)}`);
+  if (!resp.ok || data.code !== 0) {
+    throw new Error(`Bitable create failed: ${resp.status} ${JSON.stringify(data)}`);
   }
 }

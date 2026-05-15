@@ -3,6 +3,18 @@ import { recognizeTradeScreenshot } from "./llm";
 import { normalizeBroker, fillFees } from "./fees";
 import { createTradeRecord } from "./bitable";
 
+function parseTradeTime(raw: string): number {
+  const todayMatch = raw.match(/今日\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (todayMatch) {
+    const now = new Date();
+    now.setHours(+todayMatch[1], +todayMatch[2], +(todayMatch[3] || 0), 0);
+    return now.getTime();
+  }
+  const ts = new Date(raw).getTime();
+  if (!isNaN(ts)) return ts;
+  return Date.now();
+}
+
 export interface Env {
   FEISHU_APP_ID: string;
   FEISHU_APP_SECRET: string;
@@ -16,7 +28,7 @@ export interface Env {
 
 interface FeishuEvent {
   challenge?: string;
-  header?: { event_type: string; token: string };
+  header?: { event_id?: string; event_type: string; token: string };
   event?: {
     message?: {
       message_id: string;
@@ -26,8 +38,22 @@ interface FeishuEvent {
   };
 }
 
-// Deduplicate events (Feishu may retry)
-const processedEvents = new Set<string>();
+// Two-layer dedup: in-memory Set (instant, same isolate) + Cache API (cross-isolate)
+const seenEvents = new Set<string>();
+
+async function isDuplicate(eventId: string): Promise<boolean> {
+  if (seenEvents.has(eventId)) return true;
+  seenEvents.add(eventId);
+
+  const cache = caches.default;
+  const key = new Request(`https://dedup.internal/${eventId}`);
+  const cached = await cache.match(key);
+  if (cached) return true;
+  await cache.put(key, new Response("1", {
+    headers: { "Cache-Control": "max-age=300" },
+  }));
+  return false;
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -53,11 +79,11 @@ export default {
         return new Response("OK", { status: 200 });
       }
 
-      // Deduplicate
-      if (processedEvents.has(message.message_id)) {
+      // Deduplicate by event_id using Cache API (shared across isolates)
+      const eventId = body.header?.event_id;
+      if (eventId && (await isDuplicate(eventId))) {
         return new Response("OK", { status: 200 });
       }
-      processedEvents.add(message.message_id);
 
       // Only handle image messages
       if (message.message_type !== "image") {
@@ -91,8 +117,10 @@ export default {
       let result;
       try {
         result = await recognizeTradeScreenshot(env, imageBase64);
+        console.log("LLM result:", JSON.stringify(result));
       } catch (e) {
-        await replyMessage(env, message.message_id, "❌ 识别异常，请手动录入");
+        const errMsg = e instanceof Error ? e.message : String(e);
+        await replyMessage(env, message.message_id, `❌ 识别异常：${errMsg}`);
         return new Response("OK", { status: 200 });
       }
 
@@ -111,7 +139,8 @@ export default {
       }
 
       // Write to Bitable
-      const broker = normalizeBroker(result.broker);
+      const hasCode = result.trades.some((t) => t.code);
+      const broker = hasCode ? "华泰" : normalizeBroker(result.broker);
       const lines: string[] = [];
 
       for (let i = 0; i < result.trades.length; i++) {
@@ -119,8 +148,8 @@ export default {
         const fees = fillFees(trade, broker);
 
         const fields: Record<string, unknown> = {
-          股票代码: trade.code,
-          股票名称: trade.name,
+          股票代码: trade.code || "",
+          股票名称: trade.name || "",
           方向: trade.direction,
           成交价: trade.price,
           成交数量: trade.quantity,
@@ -135,20 +164,25 @@ export default {
         };
 
         if (trade.time) {
-          fields["交易时间"] = new Date(trade.time).getTime();
+          fields["交易时间"] = parseTradeTime(trade.time);
         }
 
         try {
           await createTradeRecord(env, fields);
         } catch (e) {
-          console.error(`Failed to write trade ${i}:`, e);
-          await replyMessage(env, message.message_id, "❌ 写入失败，请稍后重试");
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.error(`Failed to write trade ${i}:`, errMsg);
+          await replyMessage(env, message.message_id, `❌ 写入失败：${errMsg}`);
           return new Response("OK", { status: 200 });
         }
 
         const feeStr = fees.total > 0 ? `  手续费 ${fees.total}` : "";
+        const displayName =
+          trade.name && trade.code
+            ? `${trade.name}(${trade.code})`
+            : trade.name || trade.code || "未知";
         lines.push(
-          `${i + 1}. ${trade.direction} ${trade.name}(${trade.code}) ` +
+          `${i + 1}. ${trade.direction} ${displayName} ` +
             `${trade.quantity}股 × ${trade.price} = ${trade.amount.toLocaleString()}${feeStr}`
         );
       }
