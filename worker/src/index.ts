@@ -1,7 +1,14 @@
 import { downloadImage, replyMessage } from "./feishu";
 import { recognizeTradeScreenshot } from "./llm";
 import { normalizeBroker, fillFees } from "./fees";
-import { createTradeRecord } from "./bitable";
+import type { TradeRecord } from "./llm";
+import type { FeeBreakdown } from "./fees";
+import {
+  createTradeRecord,
+  findPortfolioPosition,
+  updatePortfolioPosition,
+  createPortfolioPosition,
+} from "./bitable";
 
 function parseTradeTime(raw: string): number {
   const todayMatch = raw.match(/今日\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -15,12 +22,65 @@ function parseTradeTime(raw: string): number {
   return Date.now();
 }
 
+async function updatePosition(
+  env: Env,
+  code: string,
+  trade: TradeRecord,
+  fees: FeeBreakdown,
+  broker: string
+): Promise<void> {
+  const existing = await findPortfolioPosition(env, code, broker);
+
+  if (existing) {
+    const oldQty = Number(existing.fields["持仓数量"]) || 0;
+    const oldCost = Number(existing.fields["成本金额"]) || 0;
+
+    let newQty: number;
+    let newCost: number;
+
+    if (trade.direction === "买入") {
+      newQty = oldQty + trade.quantity;
+      newCost = oldCost + trade.amount + fees.total;
+    } else {
+      newQty = oldQty - trade.quantity;
+      // Broker-style: sell reduces cost by sell amount, fees add to cost
+      newCost = oldCost - trade.amount + fees.total;
+    }
+
+    if (newQty < 0) newQty = 0;
+    if (newCost < 0) newCost = 0;
+    const newCostPrice = newQty > 0 ? Math.round((newCost / newQty) * 10000) / 10000 : 0;
+
+    await updatePortfolioPosition(env, existing.record_id, {
+      持仓数量: newQty,
+      成本价: newCostPrice,
+      成本金额: Math.round(newCost * 100) / 100,
+    });
+  } else {
+    // New position (only for buys)
+    if (trade.direction !== "买入") return;
+    const costAmount = Math.round((trade.amount + fees.total) * 100) / 100;
+    const costPrice = Math.round((costAmount / trade.quantity) * 10000) / 10000;
+
+    await createPortfolioPosition(env, {
+      股票代码: trade.code || "",
+      股票名称: trade.name || "",
+      券商: broker,
+      资金属性: "自有",
+      持仓数量: trade.quantity,
+      成本价: costPrice,
+      成本金额: costAmount,
+    });
+  }
+}
+
 export interface Env {
   FEISHU_APP_ID: string;
   FEISHU_APP_SECRET: string;
   FEISHU_VERIFICATION_TOKEN: string;
   FEISHU_BASE_APP_TOKEN: string;
   TABLE_ID_TRADES: string;
+  TABLE_ID_PORTFOLIO: string;
   LLM_API_BASE: string;
   LLM_API_KEY: string;
   LLM_MODEL: string;
@@ -187,10 +247,31 @@ export default {
         );
       }
 
+      // Update portfolio positions
+      const portfolioErrors: string[] = [];
+      for (const trade of result.trades) {
+        const fees = fillFees(trade, broker);
+        const code = trade.code || trade.name || "";
+        if (!code) continue;
+        try {
+          await updatePosition(env, code, trade, fees, broker);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`Portfolio update failed for ${code}:`, msg);
+          portfolioErrors.push(code);
+        }
+      }
+
+      const portfolioNote =
+        portfolioErrors.length > 0
+          ? `\n⚠️ 持仓更新失败：${portfolioErrors.join("、")}，将在每日同步时补充。`
+          : "\n📊 持仓已同步更新。";
+
       const reply =
         `✅ 已录入 ${result.trades.length} 笔交易（${broker}）：\n\n` +
         lines.join("\n") +
-        "\n\n如有误差请在多维表格中修改。";
+        portfolioNote +
+        "\n如有误差请在多维表格中修改。";
 
       await replyMessage(env, message.message_id, reply);
       return new Response("OK", { status: 200 });
